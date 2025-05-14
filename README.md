@@ -59,7 +59,7 @@ The tool operates in an interactive, step-by-step manner:
 Run the compiled application from your terminal, providing the path to a PCAP or PCAPNG file using the `-f` flag:
 
 ```bash
-./go-packet-grapher -f /path/to/your/capture.pcapng
+./go-packet-peeker -f /path/to/your/capture.pcapng
 ````
 
 Note that a sample pcapng has been included in `./sample/icmp3.pcapng`
@@ -74,7 +74,7 @@ The program will then guide you through the interactive selection process.
    
 
 ```Bash
-    ./go-packet-grapher -f ./sample/icmp3.pcapng
+    ./go-packet-peeker -f ./sample/icmp3.pcapng
 ```
 
 2. **Initial Output:**
