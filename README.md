@@ -1,155 +1,192 @@
 # go-packet-peeker
-**Analyze packet size variations to identify potential covert payloads.**
+
+[![Go Version](https://img.shields.io/badge/Go-1.18+-00ADD8?style=flat&logo=go)](https://golang.org/) [![License](https://img.shields.io/badge/License-WTFPL-brightgreen.svg)](LICENSE) [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/)
+
+> **Analyze packet size variations to identify covert payloads in network traffic.**
 
 ## Overview
 
-`go-packet-peeker` is a command-line tool written in Go for analyzing network packet captures (PCAP or PCAPNG). 
-It helps with identifying anomalies in packet sizes that might indicate covert data exfiltration or other non-standard activities.
+`go-packet-peeker` is an interactive CLI tool for detecting covert data exfiltration hidden in protocol messages that should have consistent sizes. Many protocols use fixed-size control messages (like ICMP Type 3 "Destination Unreachable"), and significant size variations within a specific communication flow can indicate unauthorized payload smuggling.
 
-For many network protocols, especially specific control messages (like ICMP Type 03 "Destination Unreachable"), 
-packet sizes are expected to be relatively consistent. Significant variations in the size of these packets within a 
-specific communication flow could suggest that they are being used to carry unauthorized payloads.
+### Use Cases
 
-This tool allows you to:
-1.  Get an overview of a packet capture.
-2.  Drill down into a specific communication flow between a specific source and destination IP pair.
-3.  Analyze the types of protocols used in that flow.
-4.  Visualize the distribution of packet sizes for a chosen protocol within that flow using a histogram.
-5.  If anomalies are suspected, extract and inspect the ASCII payloads of packets within a specified size range for that specific flow and protocol.
+| Scenario | Detection Target |
+|----------|-----------------|
+| **ICMP Tunneling** | Data hidden in ICMP echo/reply or error messages |
+| **Protocol Abuse** | Oversized DNS, NTP, or other control packets |
+| **Covert Channels** | Any protocol where packet sizes should be uniform |
+| **Data Exfiltration** | Unusual payload sizes indicating smuggled data |
 
-## How It Works
+## Features
 
-The tool operates in an interactive, step-by-step manner:
+- **Interactive Flow Selection**: Choose specific source/destination IP pairs to analyze
+- **Protocol Breakdown**: See which protocols are used in a communication flow
+- **Size Distribution Histogram**: Visualize packet size variations (PNG output)
+- **Payload Extraction**: Extract and inspect ASCII payloads within suspicious size ranges
+- **Multi-Protocol Support**: IPv4, IPv6, TCP, UDP, ICMP, DNS, HTTP, TLS
 
-1.  **Initial Scan:** Reads the entire PCAP file to identify all unique IP addresses and count total packets.
-2.  **IP Flow Selection:** Prompts the user to select a source IP and then a destination IP from the lists discovered in the initial scan.
-3.  **Protocol Breakdown:** Analyzes traffic specifically between the selected source and destination IPs and shows a count of each protocol type observed in this flow.
-4.  **Protocol Selection:** Prompts the user to select a specific protocol from this breakdown for further analysis.
-5.  **Histogram Generation:** For the selected IP flow and protocol, it analyzes packet sizes and generates a histogram (`result.png`) showing the frequency of different packet sizes.
-6.  **Payload Analysis Setup:** Prompts the user to enter a minimum and maximum packet size range.
-7.  **Payload Extraction:** Filters packets matching all criteria (Source IP, Destination IP, Protocol, and Size Range) 
-8. and writes their payloads (as printable ASCII, with non-printable characters replaced by '.') to `cleaned_unique_payloads.csv`.
+## Installation
 
-## Prerequisites
+### Prerequisites
 
-* **Go:** Version 1.18 or higher (for generics, though the current code might work with slightly older versions if generics are not yet used heavily; it's good practice to use a recent Go version).
-* **libpcap:** (or its equivalents like Npcap on Windows, libpcap-dev on Debian/Ubuntu, libpcap-devel on Fedora/CentOS). This is required by the underlying `gopacket/pcap` library for capturing and reading pcap files.
+- Go 1.18 or higher
+- libpcap development libraries
 
-## Installation / Building
+```bash
+# Ubuntu/Debian
+sudo apt-get install libpcap-dev
 
-1.  Clone the repository (or download the `main.go` file).
-    ```bash
-    # git clone https://github.com/faanross/go-packet-peeker
-    # cd go-packet-peeker
-    ```
-2.  Ensure Go is installed and your `GOPATH` is set up.
-3.  Fetch dependencies:
-    ```bash
-    go get github.com/google/gopacket
-    go get gonum.org/v1/plot
-    ```
-4.  Build the application:
-    ```bash
-    go build -o go-packet-peeker ./cmd/main.go
-    ```
-    This will create an executable named `go-packet-peeker` (or `go-packet-peeker.exe` on Windows).
+# macOS
+brew install libpcap
+
+# Windows: Install Npcap from https://npcap.com
+# (Enable "WinPcap API-compatible Mode" during installation)
+```
+
+### Build
+
+```bash
+git clone https://github.com/faanross/go-packet-peeker.git
+cd go-packet-peeker
+go mod tidy
+go build -o go-packet-peeker ./cmd/main.go
+```
 
 ## Usage
 
-Run the compiled application from your terminal, providing the path to a PCAP or PCAPNG file using the `-f` flag:
+```bash
+./go-packet-peeker -f /path/to/capture.pcapng
+```
+
+A sample capture file is included at `./sample/icmp3.pcapng` for testing.
+
+### Interactive Workflow
+
+The tool guides you through analysis step-by-step:
+
+1. **Initial Scan**: Reads PCAP to identify all unique IP addresses
+2. **Flow Selection**: Select source and destination IPs
+3. **Protocol Breakdown**: View protocol distribution for the selected flow
+4. **Protocol Selection**: Choose a specific protocol for deep analysis
+5. **Histogram Generation**: Creates `result.png` showing packet size distribution
+6. **Size Range Selection**: Specify min/max packet sizes to investigate
+7. **Payload Extraction**: Outputs unique payloads to `cleaned_unique_payloads.csv`
+
+### Example Session
 
 ```bash
-./go-packet-peeker -f /path/to/your/capture.pcapng
-````
+$ ./go-packet-peeker -f ./sample/icmp3.pcapng
 
-Note that a sample pcapng has been included in `./sample/icmp3.pcapng`
+Performing initial scan...
 
+--- Initial Analysis Complete ---
+Total packets in file: 42485
 
-The program will then guide you through the interactive selection process.
+All Source IPs found:
+  - 143.198.3.13
+  - 192.168.2.115
 
-## Example Workflow
+--- Select IPs for Flow Analysis ---
+Select Source IP:
+  1: 143.198.3.13
+  2: 192.168.2.115
+Enter number: 1
 
-1. **Run the command:**
+--- Flow Protocol Analysis Complete ---
+Total packets from 143.198.3.13 to 192.168.2.115: 326
 
-   
+Protocol Breakdown:
+  - ICMPv4 (Type 03): 326
 
-```Bash
-    ./go-packet-peeker -f ./sample/icmp3.pcapng
+--- Select Protocol for Histogram & Payload Analysis ---
+Select Protocol:
+  1: ICMPv4 (Type 03)
+Enter number: 1
+
+Histogram saved to result.png
+
+--- Enter Packet Size Range for Payload Analysis ---
+Enter minimum packet size: 100
+Enter maximum packet size: 500
+Analyzing payloads for packets between 100 and 500 bytes.
+
+Payload processing complete. 47 unique cleaned payloads written to cleaned_unique_payloads.csv
 ```
 
-2. **Initial Output:**
+## Output Files
 
-```Bash
-    Performing initial scan...
-    
-    --- Initial Analysis Complete ---
-    Total packets in file: 42485
-    
-    All Source IPs found:
-      - 143.198.3.13
-      - 192.168.2.115
-    
-    All Destination IPs found:
-      - 143.198.3.13
-      - 192.168.2.115
-  ```
+| File | Description |
+|------|-------------|
+| `result.png` | Histogram showing packet size distribution |
+| `cleaned_unique_payloads.csv` | Unique ASCII payloads extracted from suspicious packets |
 
-3. **Select IPs:**
+### Example Histogram
 
-```Bash
-    --- Select IPs for Flow Analysis ---
-    Select Source IP:
-      1: 143.198.3.13
-      2: 192.168.2.115
-    Enter number: 1
-    Source IP: 143.198.3.13, Destination IP: 192.168.2.115
-  ```
+![Packet Size Histogram](./img/result.png)
 
-   (Assume you select `192.168.2.115` for destination similarly)
+Bimodal or irregular distributions often indicate covert channel activity where some packets carry data while others are legitimate.
 
-4. **Protocol Breakdown:**
+## Detection Strategies
 
-```Bash
-    --- Flow Protocol Analysis Complete ---
-    Total packets from 143.198.3.13 to 192.168.2.115: 326
-    
-    Protocol Breakdown:
-      - ICMPv4 (Type 03): 326
-   ```
+### Indicators of Covert Channels
 
-5. **Select Protocol:**
+1. **Size Variance in Fixed-Size Protocols**
+   - ICMP error messages varying significantly from baseline
+   - DNS responses with unusual payload sizes
+
+2. **Bimodal Size Distribution**
+   - Clear separation between "normal" and "data-carrying" packets
+   - Histogram showing distinct peaks at different sizes
+
+3. **Payload Content Analysis**
+   - Base64 or hex-encoded strings in extracted payloads
+   - Human-readable text where binary is expected
+   - Consistent patterns across "anomalous" packets
+
+### Integration with Threat Hunting
+
+Use the extracted payloads to:
+- Search for command strings or encoded data
+- Correlate with known C2 signatures
+- Identify exfiltration patterns
+
+## Project Structure
 
 ```
-    --- Select Protocol for Histogram & Payload Analysis ---
-    Select Protocol:
-      1: ICMPv4 (Type 03)
-    Enter number: 1
-    Protocol selected: ICMPv4 (Type 03)
+go-packet-peeker/
+├── cmd/
+│   └── main.go        # Main application
+├── sample/
+│   └── icmp3.pcapng   # Sample PCAP for testing
+├── img/
+│   └── result.png     # Example histogram
+├── go.mod
+└── README.md
 ```
 
-6. **Histogram Generation:** A file named `result.png` will be created in the current directory, showing the packet size distribution for ICMPv4 (Type 03) packets in this flow.
-![histogram](./img/result.png)
-7. **Enter Size Range for Payload Analysis:**
+## Related Research
 
-    ```
-    --- Enter Packet Size Range for Payload Analysis ---
-    Enter minimum packet size (for ICMPv4 (Type 03) flow): 100
-    Enter maximum packet size (for ICMPv4 (Type 03) flow): 500
-    Analyzing payloads for packets between 100 and 500 bytes.
-    ```
+- [Malware of the Day: C2 over ICMP (ICMP-GOSH)](https://www.activecountermeasures.com/malware-of-the-day-c2-over-icmp-icmp-gosh/)
+- [Understanding C2 Beacons](https://www.activecountermeasures.com/malware-of-the-day-understanding-c2-beacons-part-1-of-2/)
 
-8. **Payload Report:** For packets within the specified range (100 to 500 bytes in this example), it extracts the payload, interprets it as ASCII, cleans non-ASCII characters, and saves a list of unique payloads to a CSV file named `cleaned_unique_payloads`.
+## Legal Disclaimer
 
+This tool is provided for **educational and authorized security testing purposes only**.
 
-## Sample File
-
-A sample capture file can be placed at `./sample/icmp3.pcapng` for testing and demonstration purposes.
+- Only analyze traffic from networks you own or have explicit permission to test
+- Do not use this tool for unauthorized surveillance
+- The author is not responsible for misuse of this software
 
 ## Contributing
 
-Contributions are welcome! Please feel free to open an issue or submit a pull request.
+Contributions welcome! Please open an issue or submit a pull request.
 
 ## License
 
-Cartman License - _Whatever, whatever, do you what you want_.
+WTFPL - Do What The F*ck You Want To Public License
 
+## Author
+
+**Faan Rossouw** - Security Researcher
+- [GitHub](https://github.com/faanross)
+- [Active Countermeasures Research](https://www.activecountermeasures.com)
